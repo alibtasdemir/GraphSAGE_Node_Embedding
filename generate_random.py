@@ -7,9 +7,7 @@ import networkx as nx
 
 from tqdm import tqdm
 
-
 import argparse as arg
-
 
 
 def setVertexIds(df):
@@ -67,11 +65,10 @@ def generateGraphs(params):
             outname = os.path.join(RANDOM_DIR, outname)
             np.savetxt(outname, pairsKeep, fmt=('%d', '%d'), delimiter=' ', comments='')
 
+
 if __name__ == "__main__":
     parser = arg.ArgumentParser()
-
     parser.add_argument('--outdir', '-o', required=True)
-
     parser.add_argument('--node', '-n', default=128, type=int)
     parser.add_argument('--prob', '-p', default=0.5, type=float)
     parser.add_argument('--number', '-k', default=100, type=int)
@@ -79,7 +76,6 @@ if __name__ == "__main__":
     parser.add_argument('--type', '-t', default='GNP')
 
     args = parser.parse_args()
-
     n = args.node
     p = args.prob
     k = args.number
@@ -91,7 +87,6 @@ if __name__ == "__main__":
     if not os.path.exists(RANDOM_DIR):
         os.mkdir(RANDOM_DIR)
 
-    
     print("Progress started for %s with parameters:\n\tNode: %d\n\tProbability: %f\n\tIteration: %d" % (t, n, p, k))
     params = {'graph': 'output', 'type': t, 'n': n, 'd': p, 'numGen': k}
     generateGraphs(params)
