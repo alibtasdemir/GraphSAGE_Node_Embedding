@@ -17,7 +17,7 @@ def setVertexIds(df):
 
 
 def createClique(n, k):
-    clique = sorted(np.random.choice(range(0, n), k, replace=False))
+    clique = sorted(np.random.choice(range(1, n+1), k, replace=False))
     edges = combinations(clique, 2)
     # print(clique)
     return set(edges)

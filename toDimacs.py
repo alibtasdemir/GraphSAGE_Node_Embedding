@@ -80,7 +80,7 @@ if __name__ == "__main__":
     networks = glob.glob(os.path.join(DIR, "*"))
 
     print("Checking graphs...")
-    if test_graphs(networks):
+    if not test_graphs(networks):
         sys.exit()
     print("Converting...")
     read_files(networks, OUTDIR)
