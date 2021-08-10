@@ -6,24 +6,13 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import os
-import random
 
 import stellargraph as sg
-from stellargraph.data import EdgeSplitter
 from stellargraph.mapper import GraphSAGELinkGenerator, GraphSAGENodeGenerator
 from stellargraph.layer import GraphSAGE, link_classification
 from stellargraph.data import UnsupervisedSampler
 
-import matplotlib.pyplot as plt
-
 import tensorflow.keras as keras # DO NOT USE KERAS DIRECTLY
-from sklearn import preprocessing, feature_extraction, model_selection
-
-from tensorflow.keras import layers, optimizers, losses, metrics, Model
-
-from stellargraph import globalvar
-
-import matplotlib.pyplot as plt
 
 import argparse as arg
 
@@ -44,15 +33,13 @@ def random_features(edgelist, d):
 
 def preprocess(gpath, apath, feature_d=32, insample=False, ratio=None, 
                   n_walks=1, n_length=5, batch_size=50, num_samples=[10, 5]):
-    #gpath = os.path.join(MAIN_DIR, gname)
+
     network_df = pd.read_csv(gpath, sep=" ", header=None)
     network_df.rename(columns={0:"source", 1:"target"}, inplace=True)
 
-    #apath = os.path.join(MAIN_DIR, "bio-Annot.txt")
     annot = pd.read_csv(apath, sep=" ")
     
     if insample and (ratio is not None):
-        ratio = 1
         pos = annot.Clique[annot.Clique == 1]
         neg = annot.Clique[annot.Clique == 0].sample(int(pos.shape[0]*ratio))
         targets = pd.concat([pos, neg])
@@ -100,12 +87,12 @@ def create_model(pretrained=None, tensorboard=False):
         print("Using pretrained model weights at ", pretrained)
         restore_path = pretrained
         model.load_weights(restore_path)
-        return model
+        return x_inp, x_out, model
     else:
-        return model
+        return x_inp, x_out, model
 
 
-def train_model(train_data, epochs, tensorboard=False):
+def train_GraphSage(train_data, epochs, tensorboard=False):
     # Checkpoint Directory
     # Include the epoch in the file name (uses `str.format`)
     checkpoint_path = "model/cp-{epoch:02d}.ckpt"
@@ -159,6 +146,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch', '-b', default=50, type=int)
     parser.add_argument('--pretrained', '-p', default=None)
     parser.add_argument('--tensorboard', '-t', default=False, type=bool)
+    parser.add_argument('--save', '-s', default=False, type=bool)
 
     args = parser.parse_args()
     graph_path = args.graphpath
@@ -168,6 +156,7 @@ if __name__ == "__main__":
     batch_size = args.batch
     pretrained_path = args.pretrained
     tb = args.tensorboard
+    save = args.save
 
     n_walks = 1
     n_length = 5
@@ -180,6 +169,22 @@ if __name__ == "__main__":
             insample=False, ratio=3
         )
     
-    model = create_model(pretrained=pretrained_path)
-    model, history = train_model(train_gen, epochs, tensorboard=tb)
-    print(history)
+    # Restore or train GraphSage
+    x_inp, x_out, model = create_model(pretrained=pretrained_path)
+    if pretrained_path is None:
+        model, history = train_GraphSage(train_gen, epochs, tensorboard=tb)
+    
+    x_inp_src = x_inp[0::2]
+    x_out_src = x_out[0]
+    embedding_model = keras.Model(inputs=x_inp_src, outputs=x_out_src)
+
+    node_ids = targets.index
+    node_gen = GraphSAGENodeGenerator(G, batch_size, num_samples).flow(node_ids)
+    node_embeddings = embedding_model.predict(node_gen, workers=4, verbose=1)
+    if save:
+        print(node_embeddings.shape)
+        df = pd.DataFrame(node_embeddings, columns=[i for i in range(node_embeddings.shape[1])])
+        df["Clique"] = targets.values
+        df.to_csv("embeddings_v2.csv", index=None)
+    else:
+        print(node_embeddings.shape)
