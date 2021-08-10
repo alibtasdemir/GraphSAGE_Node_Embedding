@@ -25,6 +25,8 @@ from stellargraph import globalvar
 
 import matplotlib.pyplot as plt
 
+import argparse as arg
+
 
 def random_features(edgelist, d):
     X = pd.DataFrame()
@@ -40,13 +42,13 @@ def random_features(edgelist, d):
     return X
 
 
-def getTrainReady(gname, aname, feature_d=32, insample=False, ratio=None, 
+def preprocess(gpath, apath, feature_d=32, insample=False, ratio=None, 
                   n_walks=1, n_length=5, batch_size=50, num_samples=[10, 5]):
-    gpath = os.path.join(MAIN_DIR, gname)
+    #gpath = os.path.join(MAIN_DIR, gname)
     network_df = pd.read_csv(gpath, sep=" ", header=None)
     network_df.rename(columns={0:"source", 1:"target"}, inplace=True)
 
-    apath = os.path.join(MAIN_DIR, "bio-Annot.txt")
+    #apath = os.path.join(MAIN_DIR, "bio-Annot.txt")
     annot = pd.read_csv(apath, sep=" ")
     
     if insample and (ratio is not None):
@@ -74,15 +76,110 @@ def getTrainReady(gname, aname, feature_d=32, insample=False, ratio=None,
     return network_df, G, annot, targets, train_gen, generator
 
 
-#MAIN_DIR = "/content/drive/MyDrive/CMP615 - Project"
-graph_name = "bio-All.txt"
-annot_name = "bio-Annot.txt"
-RANDOM_SEED = 9
+def create_model(pretrained=None, tensorboard=False):
+    layer_sizes = [50, 50]
+    graphsage = GraphSAGE(
+        layer_sizes=layer_sizes, generator=generator, bias=True, dropout=0.0, normalize="l2"
+    )
+    # Build the model and expose input and output sockets of graphsage, for node pair inputs:
+    x_inp, x_out = graphsage.in_out_tensors()
+    
+    prediction = link_classification(
+        output_dim=1, output_act="sigmoid", edge_embedding_method="ip"
+    )(x_out)
 
-feature_d = 32
+    model = keras.Model(inputs=x_inp, outputs=prediction)
 
-n_walks = 1
-n_length = 5
+    model.compile(
+        optimizer=keras.optimizers.Adam(lr=1e-3),
+        loss=keras.losses.binary_crossentropy,
+        metrics=[keras.metrics.Precision()],
+    )
 
-batch_size = 50
-num_samples = [10, 5]
+    if pretrained is not None:
+        print("Using pretrained model weights at ", pretrained)
+        restore_path = pretrained
+        model.load_weights(restore_path)
+        return model
+    else:
+        return model
+
+
+def train_model(train_data, epochs, tensorboard=False):
+    # Checkpoint Directory
+    # Include the epoch in the file name (uses `str.format`)
+    checkpoint_path = "model/cp-{epoch:02d}.ckpt"
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+
+    if tensorboard:
+        # Setup Callback
+        cp_callback = [
+            keras.callbacks.ModelCheckpoint(
+                filepath=checkpoint_path, 
+                verbose=1, 
+                save_weights_only=True
+            ),
+            keras.callbacks.TensorBoard(
+                log_dir='tensorboard_logs',
+                histogram_freq=1
+            )
+            ]
+    else:
+        cp_callback = [
+            keras.callbacks.ModelCheckpoint(
+                filepath=checkpoint_path, 
+                verbose=1, 
+                save_weights_only=True
+            )
+            ]
+
+    # Save the weights using the `checkpoint_path` format
+    model.save_weights(checkpoint_path.format(epoch=0))
+
+    #TRAIN
+    history = model.fit(
+        train_data,
+        epochs=epochs,
+        verbose=1,
+        use_multiprocessing=False,
+        workers=4,
+        shuffle=True,
+        callbacks=cp_callback
+    )
+
+    return model, history
+
+
+if __name__ == "__main__":
+    parser = arg.ArgumentParser()
+    parser.add_argument('--graphpath', '-g', required=True)
+    parser.add_argument('--annotpath', '-a', required=True)
+    parser.add_argument('--epochs', '-e', default=5, type=int)
+    parser.add_argument('--dfeature', '-f', default=32, type=int)
+    parser.add_argument('--batch', '-b', default=50, type=int)
+    parser.add_argument('--pretrained', '-p', default=None)
+    parser.add_argument('--tensorboard', '-t', default=False, type=bool)
+
+    args = parser.parse_args()
+    graph_path = args.graphpath
+    annot_path = args.annotpath
+    epochs = args.epochs
+    feature_d = args.dfeature
+    batch_size = args.batch
+    pretrained_path = args.pretrained
+    tb = args.tensorboard
+
+    n_walks = 1
+    n_length = 5
+    num_samples = [10, 5]
+
+    #PRETRAINING
+    network_df, G, annot, targets, train_gen, generator = preprocess(
+            graph_path, annot_path, feature_d=feature_d, n_walks=n_walks, 
+            n_length=n_length, batch_size=batch_size, num_samples=num_samples,
+            insample=False, ratio=3
+        )
+    
+    model = create_model(pretrained=pretrained_path)
+    model, history = train_model(train_gen, epochs, tensorboard=tb)
+    print(history)

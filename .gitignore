@@ -1,4 +1,4 @@
 random_samples_*/
 cliquer/*
-model/
-tensorboard/
+model/*
+tensorboard_logs/*
