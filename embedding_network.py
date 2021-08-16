@@ -185,6 +185,6 @@ if __name__ == "__main__":
         print(node_embeddings.shape)
         df = pd.DataFrame(node_embeddings, columns=[i for i in range(node_embeddings.shape[1])])
         df["Clique"] = targets.values
-        df.to_csv("embeddings_v2.csv", index=None)
+        df.to_csv("embeddings.csv", index=None)
     else:
         print(node_embeddings.shape)

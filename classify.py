@@ -115,17 +115,22 @@ def test_model(X_train, X_test, y_train, y_test, modelType):
 
 
 if __name__ == "__main__":
+    n=512
     data = pd.read_csv("embeddings.csv")
-    X, y = data.drop("Clique", axis=1), data["Clique"].values
+    train_ratio = int((data.shape[0]/n)*0.8)*n
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X, y = data.drop("Clique", axis=1), data["Clique"].values
+    X_train, y_train = X.loc[:train_ratio-1, :], y[:train_ratio]
+    X_test, y_test = X.loc[train_ratio:,:], y[train_ratio:]
+
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        # test_model(X_train, X_test, y_train, y_test, 'svm')
-        # print("#" * 100)
+        test_model(X_train, X_test, y_train, y_test, 'svm')
+        print("#" * 100)
         test_model(X_train, X_test, y_train, y_test, 'log')
         print("#" * 100)
+        test_model(X_train, X_test, y_train, y_test, 'sgd')
+        print("#" * 100)
         test_model(X_train, X_test, y_train, y_test, 'rf')
-        # print("#" * 100)
-        # test_model(X_train, X_test, y_train, y_test, 'sgd')

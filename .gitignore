@@ -5,3 +5,4 @@ tensorboard_logs/*
 classifier_models/*
 test_samples_*/*
 embeddings.csv
+*.txt
